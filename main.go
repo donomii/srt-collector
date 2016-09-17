@@ -80,12 +80,20 @@ func dstFileName(picked string) string {
     return parts[len(parts)-1]
 }
 
+func timeOut(seconds int) {
+    time.Sleep(time.Duration(seconds) * time.Second)
+    log.Println("TIMEOUT - exiting now")
+    os.Exit(1)
+}
+
 func main() {
     log.SetFlags(log.LstdFlags | log.Lshortfile)
     var rootGroup struct {
         Client    torrent.Config `group:"Client Options"`
         TestPeers []string       `long:"test-peer" description:"address of peer to inject to every torrent"`
         Pick      string         `long:"pick" description:"filename to pick"`
+        Dir       string         `long:"dir" description:"directory to save files to"`
+        TimeOut   int            `long:"timeout" description:"timeout in seconds"`
     }
     // Don't pass flags.PrintError because it's inconsistent with printing.
     // https://github.com/jessevdk/go-flags/issues/132
@@ -97,7 +105,10 @@ func main() {
         fmt.Println(err)
         os.Exit(2)
     }
-    log.Printf("File to pick: %s", rootGroup.Pick)
+    if rootGroup.TimeOut > 0 {
+        go timeOut(rootGroup.TimeOut)
+    }
+    //log.Printf("File to pick: %s", rootGroup.Pick)
 
     testPeers, err := resolvedPeerAddrs(rootGroup.TestPeers)
     if err != nil {
@@ -155,27 +166,28 @@ func main() {
             defer close(done)
             <-t.GotInfo()
             for _, file := range t.Files() {
-                re := regexp.MustCompile("srt$")
+                //re := regexp.MustCompile("srt$|sbv$|sub$|mpsub$|lrc$|cap$|smi$|sami$|rt$|vtt$|ttml$|dfxp$|scc$|stl$|cin$|asc$")
+                re := regexp.MustCompile(rootGroup.Pick)
                 if re.FindString(file.DisplayPath()) == ""  {
-                    log.Printf("Skipping: ", file.DisplayPath())
+                    log.Printf("Skipping: %v", file.DisplayPath())
                     continue
                 } else {
-                    fullName := file.Path()
+                    fullName := fmt.Sprintf("%v/%v", strings.TrimSpace(rootGroup.Dir), strings.TrimSpace( file.Path()))
+                    fullName = strings.TrimSuffix(fullName, "\n")
+                    fullName = strings.TrimSuffix(fullName, "\r")
                     os.MkdirAll(filepath.Dir(fullName), 0777)
-                    dstName := dstFileName(fullName)
-
-                    
-                    f, err := os.Create(dstName)
+                    f, err := os.Create(fullName)
                     if err != nil {
                         log.Fatal(err)
                     }
                     dstWriter := bufio.NewWriter(f)
-                    log.Printf("Downloading %v to %v\n", file.Path(), fullName)
+                    log.Printf("Downloading %v\n", file.DisplayPath())
                     srcReader := missinggo.NewSectionReadSeeker(t.NewReader(), file.Offset(), file.Length())
                     io.Copy(dstWriter, srcReader)
                 }
             }
-            log.Print("file not found")
+            log.Print("Torrent Complete")
+            os.Exit(0)
         }()
     }
 
