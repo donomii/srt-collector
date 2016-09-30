@@ -1,3 +1,5 @@
+--{-# LANGUAGE AllowAmbiguousTypes #-}
+
 import System.Environment
 import Text.Parsec
 import Text.Parsec.ByteString
@@ -22,8 +24,16 @@ main = do
       [str1, str2] -> do
                     res1 <- parseFromFile myParser str1
                     res2 <- parseFromFile myParser str2
-                    matchSrtList (deMonad res1) (deMonad res2) 3
+                    matchSrtList (tuples2tuple(deMonad res1)) (tuples2tuple(deMonad res2)) 10
       _ -> error "please pass one argument with the file containing the text to parse"
+third (_, _, x) = x
+second (_, x, _) = x
+first (x, _, _) = x
+
+--tuples2tuple :: [(t, (([a], b), b1), t1)] -> (t, c, t1)
+tuples2tuple :: [(UString, (([UString], UString), ([UString], UString)), [UString])] -> [(UString, Int, [UString])]
+tuples2tuple [] = []
+tuples2tuple (x:xs) = (first x, time2int (fst (fst (second x))), third (x)) : tuples2tuple xs
 
 myTail [] = []
 myTail xs = tail xs
@@ -37,44 +47,41 @@ time2int strs = let     h = readInt (strs !! 0)
                         s = readInt (strs !! 2)
                 in
                     3600*h + 60*m + s
-matchSrtList ::
-     (Eq a, Ord a) => (Show a) => (Show b) => (Show b1) =>(Show b2) =>(Show b3) =>(Show t) => (Show t1) => (Show t2) => (Show t3)  =>
-    [(t, (([a], b), b1), [t1])]->[(t2, (([a], b2), b3), [t3])] -> Int ->IO ()
+--matchSrtList :: (Eq a, Ord a, Eq a0, Ord a0) => [(UString, Int, [UString])] -> [(UString, Int, [UString])] -> Int -> IO ()
 matchSrtList [] _ _ = putStr ""
 matchSrtList _ [] _ = putStr ""
-matchSrtList (x:xs) (x1:xs1) slideMax = do
-                        -- print "---"
-                        -- print (Data.List.length xs)
-                        -- print (Data.List.length xs1)
-                        print x
-                        if matchSrt x  x1 then
+matchSrtList (x:xs) (x1:xs1) slideMax =
+                    let t1 = (second x) :: Int
+                        t2 = (second x1) :: Int
+                    in
+                      do
+                        if  (t1 :: Int) == (t2 :: Int) then
                             do print "Match"
                                print x
                                print x1
+                               matchSrtList xs xs1 slideMax
+                        else
+                         do print "No match"
+                            if t1 > t2 then
+                                do
+                                    print x1
+                                    matchSrtList (x:xs) xs1 slideMax
                             else
-                                if slideMax > 0 then
-                                    do
-                                        putStrLn ("Failed, splitting at " ++ (show x))
-                                        matchSrtList (x:xs) xs1 (slideMax-1)
-                                        matchSrtList xs (x1:xs1) (slideMax-1)
-                                        putStr ""
-                                else
-                                        putStr ""
-                        matchSrtList (myTail xs) (myTail xs1) ( slideMax - 1)
+                                do
+                                    print x
+                                    matchSrtList xs (x1:xs1) slideMax
+
+
 
 extractTime :: (t, (([a], b), b1), t1) -> [a]
 extractTime (id1,times1,text1) =  fst (fst times1)
 
 matchSrt :: (Eq a, Ord a) => (t, (([a], b), b1), t1) -> (t2, (([a], b2), b3), t3) -> Bool
 matchSrt times1 times2 =
-                                -- print (show ((fst (fst times1)) !! 1))
-                                -- print (show ((fst (fst times2)) !! 1))
-                                -- print (show (zip (fst (fst times1)) (fst (fst times2)) ))
-                                -- print (cmpPairs (zip (fst (fst times1)) (fst (fst times2))))
-                                if   (cmpTimes (extractTime times1) (extractTime  times2)) > 2 then
-                                    True
-                                else
-                                    False
+                        if   (cmpTimes (extractTime times1) (extractTime  times2)) > 2 then
+                            True
+                        else
+                            False
 
 cmpTimes :: Eq a => [a] -> [a] -> Int
 cmpTimes times1 times2 = Data.List.length (cmpPairs (zip  times1 times2))
