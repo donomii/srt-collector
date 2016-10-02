@@ -25,7 +25,7 @@ main = do
                     res1 <- parseFromFile myParser str1
                     res2 <- parseFromFile myParser str2
                     matchSrtList (tuples2tuple(deMonad res1)) (tuples2tuple(deMonad res2)) 10
-      _ -> error "please pass one argument with the file containing the text to parse"
+      _ -> error "please pass two arguments with the files containing the text to parse"
 third (_, _, x) = x
 second (_, x, _) = x
 first (x, _, _) = x
