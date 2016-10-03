@@ -24,8 +24,16 @@ main = do
       [str1, str2] -> do
                     res1 <- parseFromFile myParser str1
                     res2 <- parseFromFile myParser str2
+		    printErr res1
+		    printErr res2
                     matchSrtList (tuples2tuple(deMonad res1)) (tuples2tuple(deMonad res2)) 10
       _ -> error "please pass two arguments with the files containing the text to parse"
+
+
+
+printErr result = case result of
+                    Left val -> print (show val)
+                    Right val  ->  putStr ""
 third (_, _, x) = x
 second (_, x, _) = x
 first (x, _, _) = x
@@ -104,7 +112,7 @@ formatOutput result = case result of
                     Right val  ->  concatMap (\x ->encodeStrict x ++ "\n") val
 
 deMonad result = case result of
-                    Left val -> []
+                    Left val -> [ ]
                     Right val  ->  val
 
 myParser :: Parser [(UString, (([UString], UString), ([UString], UString)), [UString])]
