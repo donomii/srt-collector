@@ -184,6 +184,7 @@ func main() {
                     log.Printf("Downloading %v\n", file.DisplayPath())
                     srcReader := missinggo.NewSectionReadSeeker(t.NewReader(), file.Offset(), file.Length())
                     io.Copy(dstWriter, srcReader)
+		    dstWriter.Flush()
                 }
             }
             log.Print("Torrent Complete")
