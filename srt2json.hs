@@ -1,5 +1,7 @@
---{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE OverloadedStrings #-}
 
+import Database.HDBC 
+import Database.HDBC.Sqlite3
 import System.Environment
 import Text.Parsec
 import Text.Parsec.ByteString
@@ -15,6 +17,8 @@ import qualified Data.ByteString.Char8 as C
 
 -- type UString = Data.Text.Internal.Text
 type UString = String
+type MyTime = Float
+
 
 main :: IO ()
 main = do
@@ -24,12 +28,52 @@ main = do
       [str1, str2] -> do
                     res1 <- parseFromFile myParser str1
                     res2 <- parseFromFile myParser str2
-		    printErr res1
-		    printErr res2
-                    matchSrtList (tuples2tuple(deMonad res1)) (tuples2tuple(deMonad res2)) 10
+                    printErr res1
+                    printErr res2
+                    void $ mapM (\(x1, x2) -> do
+                                        s1 <- addString $ unwords $ third x1
+                                        s2 <- addString $ unwords $ third x2
+                                        addLink s1 s2
+                                        return(x1)
+                        ) (matchSrtList (tuples2tuple(deMonad res1)) (tuples2tuple(deMonad res2)) 10)
+                    print "Done"
       _ -> error "please pass two arguments with the files containing the text to parse"
 
+-- foldCount = fold (1 +) 0 
 
+-- To translate:
+-- select * from test where id=(select b from links where a=(select id from test where str='ll ne fallait pas.'));
+
+addLink :: Integer -> Integer -> IO ()
+addLink id1 id2 = do
+  conn <- connectSqlite3 "test.db"
+  run conn "CREATE TABLE IF NOT EXISTS links (id INTEGER PRIMARY KEY,  a INTEGER, b INTEGER)" []
+  run conn "INSERT INTO links (a,b) VALUES (?,?)" [toSql id1, toSql id2]
+  run conn "INSERT INTO links (b,a) VALUES (?,?)" [toSql id1, toSql id2]
+  commit conn
+  disconnect conn
+
+addString :: UString -> IO Integer
+addString aStr = do
+  conn <- connectSqlite3 "test.db"
+  run conn "CREATE TABLE IF NOT EXISTS test (id INTEGER PRIMARY KEY, str TEXT UNIQUE)" []
+  r <- quickQuery conn "SELECT id from test where str = ?" [toSql aStr]
+  ret <- if Data.List.length r  < 1 then
+            do
+              run conn "INSERT INTO test (str) VALUES (?)" [toSql aStr]
+              commit conn
+              r <- quickQuery conn "SELECT id from test where str = ?" [toSql aStr]
+              if Data.List.length r  < 1 then
+                do
+                  print r
+                  return (-1)
+              else
+                  return (fromSql ((r !! 0)!!0))
+          else
+            return (fromSql ((r !! 0)!!0))
+  commit conn
+  disconnect conn
+  return ret
 
 printErr result = case result of
                     Left val -> print (show val)
@@ -39,15 +83,25 @@ second (_, x, _) = x
 first (x, _, _) = x
 
 --tuples2tuple :: [(t, (([a], b), b1), t1)] -> (t, c, t1)
-tuples2tuple :: [(UString, (([UString], UString), ([UString], UString)), [UString])] -> [(UString, Int, [UString])]
+tuples2tuple :: [(UString, (([UString], UString), ([UString], UString)), [UString])] -> [(UString, Float, [UString])]
 tuples2tuple [] = []
-tuples2tuple (x:xs) = (first x, time2int (fst (fst (second x))), third (x)) : tuples2tuple xs
+tuples2tuple (x:xs) = (first x, time2float (fst (second x)), third (x)) : tuples2tuple xs
+-- tuples2tuple (x:xs) = (first x, time2int (fst (fst (second x))), third (x)) : tuples2tuple xs
 
 myTail [] = []
 myTail xs = tail xs
 
 readInt :: String -> Int
 readInt = read
+readFloat :: String -> MyTime
+readFloat = read
+
+time2float (strs, millis) = let h = readFloat (strs !! 0) :: Float
+                                m = readFloat (strs !! 1) :: Float
+                                s = readFloat (strs !! 2) :: Float
+                                mm= readFloat millis :: Float
+                            in
+                                3600*h + 60*m + s + (mm/1000)::Float
 
 
 time2int strs = let     h = readInt (strs !! 0)
@@ -56,43 +110,34 @@ time2int strs = let     h = readInt (strs !! 0)
                 in
                     3600*h + 60*m + s
 --matchSrtList :: (Eq a, Ord a, Eq a0, Ord a0) => [(UString, Int, [UString])] -> [(UString, Int, [UString])] -> Int -> IO ()
-matchSrtList [] _ _ = putStr ""
-matchSrtList _ [] _ = putStr ""
+matchSrtList [] _ _ = []
+matchSrtList _ [] _ = []
 matchSrtList (x:xs) (x1:xs1) slideMax =
-                    let t1 = (second x) :: Int
-                        t2 = (second x1) :: Int
+                    let t1 = (second x) :: MyTime
+                        t2 = (second x1) :: MyTime
                     in
                       do
-                        if  (t1 :: Int) == (t2 :: Int) then
-                            do print "Match"
-                               print x
-                               print x1
-                               matchSrtList xs xs1 slideMax
+                        --print ((t1 :: MyTime)- (t2 :: MyTime))
+                        if  abs((t1 :: MyTime)- (t2 :: MyTime)) < 0.9 then
+                            do
+                               -- print "Match"
+                               (x, x1) : matchSrtList xs xs1 slideMax
                         else
-                         do print "No match"
+                         do
+                            -- print "No match"
                             if t1 > t2 then
                                 do
-                                    print x1
+                                    -- print x1
                                     matchSrtList (x:xs) xs1 slideMax
                             else
                                 do
-                                    print x
+                                    -- print x
                                     matchSrtList xs (x1:xs1) slideMax
 
 
 
 extractTime :: (t, (([a], b), b1), t1) -> [a]
 extractTime (id1,times1,text1) =  fst (fst times1)
-
-matchSrt :: (Eq a, Ord a) => (t, (([a], b), b1), t1) -> (t2, (([a], b2), b3), t3) -> Bool
-matchSrt times1 times2 =
-                        if   (cmpTimes (extractTime times1) (extractTime  times2)) > 2 then
-                            True
-                        else
-                            False
-
-cmpTimes :: Eq a => [a] -> [a] -> Int
-cmpTimes times1 times2 = Data.List.length (cmpPairs (zip  times1 times2))
 
 cmpPairs :: Eq a => [(a, a)] -> [(a, a)]
 cmpPairs [] = []
