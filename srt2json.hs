@@ -30,14 +30,35 @@ main = do
                     res2 <- parseFromFile myParser str2
                     printErr res1
                     printErr res2
-                    void $ mapM (\(x1, x2) -> do
+                    count <- mapM (\(x1, x2) -> do
                                         s1 <- addString $ unwords $ third x1
                                         s2 <- addString $ unwords $ third x2
-                                        addLink s1 s2
                                         return(x1)
                         ) (matchSrtList (tuples2tuple(deMonad res1)) (tuples2tuple(deMonad res2)) 10)
+                    if calcPercent count res1 res2 > 0.85 then
+                      do
+                        count <- mapM (\(x1, x2) -> do
+                                            s1 <- addString $ unwords $ third x1
+                                            s2 <- addString $ unwords $ third x2
+                                            addLink s1 s2
+                                            return(x1)
+                            ) (matchSrtList (tuples2tuple(deMonad res1)) (tuples2tuple(deMonad res2)) 10)
+                        putStr "Matched "
+                        print $ Data.List.length (count)
+                        putStr " of "
+                        print $ Data.List.length (tuples2tuple (deMonad (res1)))
+                        print $ calcPercent count res1 res2
+                    else
+                        print "Files did not match - perhaps they are from different recordings?"
+                    -- total <- fromIntegral (Data.List.length (tuples2tuple (deMonad (res1)))) :: float
+                    -- print $ counted / total
+
                     print "Done"
       _ -> error "please pass two arguments with the files containing the text to parse"
+
+calcPercent a b c =  foo (Data.List.length a) (min (Data.List.length (tuples2tuple (deMonad (c)))) (Data.List.length (tuples2tuple (deMonad (b)))))
+foo :: Int -> Int -> Float
+foo a b = (fromIntegral a) / (fromIntegral b)
 
 -- foldCount = fold (1 +) 0 
 
