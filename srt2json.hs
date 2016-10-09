@@ -26,21 +26,21 @@ main = do
     print a
     case a of
       [str1, str2] -> do
+		    conn <- connectSqlite3 "srt.sqlite"
+		    void $ createDB conn
                     res1 <- parseFromFile myParser str1
                     res2 <- parseFromFile myParser str2
                     printErr res1
                     printErr res2
                     count <- mapM (\(x1, x2) -> do
-                                        s1 <- addString $ unwords $ third x1
-                                        s2 <- addString $ unwords $ third x2
                                         return(x1)
                         ) (matchSrtList (tuples2tuple(deMonad res1)) (tuples2tuple(deMonad res2)) 10)
-                    if calcPercent count res1 res2 > 0.85 then
+                    if calcPercent count res1 res2 > 0.70 then
                       do
                         count <- mapM (\(x1, x2) -> do
-                                            s1 <- addString $ unwords $ third x1
-                                            s2 <- addString $ unwords $ third x2
-                                            addLink s1 s2
+                                            s1 <- addString conn $ unwords $ third x1
+                                            s2 <- addString conn $ unwords $ third x2
+                                            addLink conn s1 s2
                                             return(x1)
                             ) (matchSrtList (tuples2tuple(deMonad res1)) (tuples2tuple(deMonad res2)) 10)
                         putStr "Matched "
@@ -49,10 +49,14 @@ main = do
                         print $ Data.List.length (tuples2tuple (deMonad (res1)))
                         print $ calcPercent count res1 res2
                     else
+		     do
+                        print $ calcPercent count res1 res2
                         print "Files did not match - perhaps they are from different recordings?"
                     -- total <- fromIntegral (Data.List.length (tuples2tuple (deMonad (res1)))) :: float
                     -- print $ counted / total
 
+	            commit conn
+		    disconnect conn
                     print "Done"
       _ -> error "please pass two arguments with the files containing the text to parse"
 
@@ -65,25 +69,32 @@ foo a b = (fromIntegral a) / (fromIntegral b)
 -- To translate:
 -- select * from test where id=(select b from links where a=(select id from test where str='ll ne fallait pas.'));
 
-addLink :: Integer -> Integer -> IO ()
-addLink id1 id2 = do
-  conn <- connectSqlite3 "test.db"
-  run conn "CREATE TABLE IF NOT EXISTS links (id INTEGER PRIMARY KEY,  a INTEGER, b INTEGER)" []
-  run conn "INSERT INTO links (a,b) VALUES (?,?)" [toSql id1, toSql id2]
-  run conn "INSERT INTO links (b,a) VALUES (?,?)" [toSql id1, toSql id2]
-  commit conn
-  disconnect conn
+createDB :: Connection -> IO ()
+createDB conn =
+  do
+    run conn "CREATE TABLE IF NOT EXISTS links (id INTEGER PRIMARY KEY,  a INTEGER, b INTEGER)" []
+    run conn "CREATE UNIQUE INDEX IF NOT EXISTS 'links_idx' ON links (a,b);" []
+    run conn "CREATE TABLE IF NOT EXISTS strs (id INTEGER PRIMARY KEY, str TEXT UNIQUE)" []
+    run conn "CREATE UNIQUE INDEX IF NOT EXISTS 'strings_idx' ON strs (str);" []
+    -- run conn "PRAGMA journal_mode = WAL;" []
+    commit conn
+    return ()
 
-addString :: UString -> IO Integer
-addString aStr = do
-  conn <- connectSqlite3 "test.db"
-  run conn "CREATE TABLE IF NOT EXISTS test (id INTEGER PRIMARY KEY, str TEXT UNIQUE)" []
-  r <- quickQuery conn "SELECT id from test where str = ?" [toSql aStr]
+addLink :: Connection -> Integer -> Integer -> IO ()
+addLink conn id1 id2 = do
+  run conn "INSERT OR IGNORE INTO links (a,b) VALUES (?,?)" [toSql id1, toSql id2]
+  run conn "INSERT OR IGNORE INTO links (b,a) VALUES (?,?)" [toSql id1, toSql id2]
+  commit conn
+  return ()
+
+addString :: Connection -> UString -> IO Integer
+addString conn aStr = do
+  r <- quickQuery conn "SELECT id from strs where str = ?" [toSql aStr]
   ret <- if Data.List.length r  < 1 then
             do
-              run conn "INSERT INTO test (str) VALUES (?)" [toSql aStr]
+              run conn "INSERT OR IGNORE INTO strs (str) VALUES (?)" [toSql aStr]
               commit conn
-              r <- quickQuery conn "SELECT id from test where str = ?" [toSql aStr]
+              r <- quickQuery conn "SELECT id from strs where str = ?" [toSql aStr]
               if Data.List.length r  < 1 then
                 do
                   print r
@@ -92,8 +103,6 @@ addString aStr = do
                   return (fromSql ((r !! 0)!!0))
           else
             return (fromSql ((r !! 0)!!0))
-  commit conn
-  disconnect conn
   return ret
 
 printErr result = case result of
