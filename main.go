@@ -95,6 +95,7 @@ func main() {
         Dir       string         `long:"dir" description:"directory to save files to"`
         TimeOut   int            `long:"timeout" description:"timeout in seconds"`
     }
+    rootGroup.Client.ListenAddr = fmt.Sprintf(":%v", os.Getpid())
     // Don't pass flags.PrintError because it's inconsistent with printing.
     // https://github.com/jessevdk/go-flags/issues/132
     parser := flags.NewParser(&rootGroup, flags.HelpFlag|flags.PassDoubleDash)
@@ -120,7 +121,8 @@ func main() {
         return
     }
 
-    tmpdir, err := ioutil.TempDir("", "torrent-pick-")
+	//FIXME: add command-line option for seting temp directory
+    tmpdir, err := ioutil.TempDir("/tmp/", "torrent-pick-")
     if err != nil {
         log.Fatal(err)
     }
@@ -181,14 +183,14 @@ func main() {
                         log.Fatal(err)
                     }
                     dstWriter := bufio.NewWriter(f)
-                    log.Printf("Downloading %v\n", file.DisplayPath())
+                    //log.Printf("Downloading %v\n", file.DisplayPath())
                     srcReader := missinggo.NewSectionReadSeeker(t.NewReader(), file.Offset(), file.Length())
                     io.Copy(dstWriter, srcReader)
 		    dstWriter.Flush()
                 }
             }
             log.Print("Torrent Complete")
-            os.Exit(0)
+            done <- struct{}{}
         }()
     }
 
@@ -199,7 +201,7 @@ waitDone:
         case <-done:
             break waitDone
         case <-ticker.C:
-            os.Stdout.WriteString(progressLine(client))
+            //os.Stdout.WriteString(progressLine(client))
         }
     }
     if rootGroup.Client.Seed {
