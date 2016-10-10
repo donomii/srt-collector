@@ -35,7 +35,7 @@ main = do
                     count <- mapM (\(x1, x2) -> do
                                         return(x1)
                         ) (matchSrtList (tuples2tuple(deMonad res1)) (tuples2tuple(deMonad res2)) 10)
-                    if calcPercent count res1 res2 > 0.70 then
+                    if calcPercent count res1 res2 > 0.74 then
                       do
                         count <- mapM (\(x1, x2) -> do
                                             s1 <- addString conn $ unwords $ third x1
