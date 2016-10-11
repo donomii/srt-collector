@@ -305,6 +305,9 @@ myText = many1 textLine
 textLine = do
             text <- many1 (noneOf "\r\n")
             optional myCrlf
+            optional myCrlf
+            optional myCrlf
+            optional myCrlf
             return (toString (C.pack text))
 
 myCrlf = do
