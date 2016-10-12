@@ -194,6 +194,7 @@ tryParsers fileName = do
                         case result of
                             Right val  ->  return(result)
                             Left val -> do
+				    -- print result
                                     res <- parseFromFile ssaParser fileName
                                     return res
 
@@ -273,6 +274,7 @@ block = do
             time <- timeLine
             t <- myText
             optional myCrlf
+            optional myCrlf
             return $ SubTitle (time2float (fst time)) (time2float (snd time)) t
 
 num = many1 digit
@@ -300,13 +302,10 @@ timeLine = do
             optional myCrlf
             return (start,finish)
 
-myText = many1 textLine
+myText = many textLine
 
 textLine = do
             text <- many1 (noneOf "\r\n")
-            optional myCrlf
-            optional myCrlf
-            optional myCrlf
             optional myCrlf
             return (toString (C.pack text))
 
