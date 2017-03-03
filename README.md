@@ -8,7 +8,7 @@ Downloads srt files from torrents
  
  
 # Example
-    ./main --dir='./subs/' --pick='srt$' --timeout=240 torrent
+    ./main --dir='./subs/' --pick='srt$' --timeout=240 (magnet URI or .torrent file path)
 
 # Options
 
