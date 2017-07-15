@@ -10,3 +10,5 @@
 *.o
 
 srt2json
+
+main
